@@ -1,0 +1,9 @@
+{
+  "name": "clam-bump-jr-draft-tracker",
+  "version": "1.0.0",
+  "description": "Click-to-pick fantasy football draft tracker with an AI-powered suggestion backend.",
+  "private": true,
+  "engines": {
+    "node": ">=18"
+  }
+}

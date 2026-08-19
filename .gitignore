@@ -1,0 +1,8 @@
+# Never commit your real secrets file — only .env.example (a template) is tracked.
+.env
+
+# Netlify CLI's local cache/build output
+.netlify/
+
+# Standard Node.js noise, in case you add dependencies later
+node_modules/

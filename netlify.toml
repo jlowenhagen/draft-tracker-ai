@@ -1,0 +1,13 @@
+# netlify.toml
+# -------------
+# This tells Netlify two things:
+# 1. "publish" — which folder holds the static site to serve (the root,
+#    since index.html lives right here).
+# 2. "functions" — where to find serverless function files. Netlify auto-
+#    deploys everything in that folder as callable HTTP endpoints, each
+#    named after its file: netlify/functions/suggest-pick.js becomes
+#    /.netlify/functions/suggest-pick
+
+[build]
+  publish = "."
+  functions = "netlify/functions"
