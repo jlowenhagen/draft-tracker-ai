@@ -9,7 +9,7 @@
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="theme-color" content="#12140f" />
 <link rel="apple-touch-icon" href="apple-touch-icon.png" />
-<title>Clam Bump Jr Draft Tracker</title>
+<title>Draft Tracker</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap');
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -21,25 +21,28 @@
 
   .header { display:flex; justify-content:space-between; align-items:center; padding:16px 16px 12px;
     border-bottom:1px solid #2a2e26; flex-wrap:wrap; gap:10px; }
-  .leagueName { font-family:'Oswald',sans-serif; font-weight:700; font-size:20px; letter-spacing:.04em; color:#f3f1e7; }
+  .leagueName { font-family:'Oswald',sans-serif; font-weight:700; font-size:20px; letter-spacing:.04em; color:#f3f1e7;
+    max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .leagueMeta { font-size:11px; color:#8b9184; margin-top:2px; }
   .headerRight { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
   .pickBadge { display:flex; flex-direction:column; align-items:center; padding:5px 12px; border:1px solid #3a3f38;
     border-radius:8px; min-width:76px; }
   .pickBadgeLabel { font-size:8px; letter-spacing:.08em; color:#8b9184; }
   .pickBadgeValue { font-family:'Oswald',sans-serif; font-size:15px; font-weight:600; color:#eee; }
-  .undoBtn, .resetBtn { background:transparent; border:1px solid #3a3f38; color:#c9cdc3; border-radius:8px;
-    padding:8px 12px; font-size:12px; cursor:pointer; }
+  .undoBtn, .resetBtn, .settingsBtn, .leaguesBtn { background:transparent; border:1px solid #3a3f38; color:#c9cdc3;
+    border-radius:8px; padding:8px 12px; font-size:12px; cursor:pointer; }
   .undoBtn:disabled { opacity:0.4; }
   .resetBtn { border-color:#4a2e2e; color:#c98080; width:100%; margin-top:4px; }
+  .settingsBtn { border-color:#4a3f1f; color:#d4a72c; }
+  .leaguesBtn { border-color:#2a3f4a; color:#4ab3d4; max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
   .snakeWrap { display:flex; align-items:center; gap:8px; padding:8px 16px; border-bottom:1px solid #2a2e26;
     overflow-x:auto; }
   .snakeRoundLabel { font-family:'IBM Plex Mono',monospace; font-size:10px; color:#8b9184; flex-shrink:0; }
   .snakeTrack { display:flex; gap:5px; }
   .snakeDot { width:24px; height:24px; border-radius:50%; background:#1e2118; border:1px solid #3a3f38;
-    display:flex; align-items:center; justify-content:center; font-size:10px; font-family:'IBM Plex Mono',monospace;
-    color:#8b9184; flex-shrink:0; }
+    display:flex; align-items:center; justify-content:center; font-size:9px; font-family:'IBM Plex Mono',monospace;
+    color:#8b9184; flex-shrink:0; overflow:hidden; }
   .snakeDotYou { border-color:#d4a72c; color:#d4a72c; }
   .snakeDotCurrent { background:#d4a72c; color:#12140f; font-weight:700; }
 
@@ -93,7 +96,6 @@
     width:30px; text-align:center; flex-shrink:0; }
   .rowName { flex:1; font-size:13px; font-weight:500; color:#eee; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .rowTeam { font-size:10px; color:#8b9184; font-family:'IBM Plex Mono',monospace; flex-shrink:0; }
-  .rowTier { font-size:9px; color:#6f756a; flex-shrink:0; display:none; }
   .stealChip { font-size:9px; font-weight:700; color:#d4a72c; background:rgba(212,167,44,0.12); border-radius:5px;
     padding:3px 5px; flex-shrink:0; }
 
@@ -107,14 +109,53 @@
     font-size:13px; cursor:pointer; }
 
   .emptyState { padding:24px; color:#6f756a; font-size:13px; text-align:center; }
+
+  .modalOverlay { position:fixed; inset:0; background:rgba(0,0,0,0.6); display:flex; align-items:flex-end;
+    justify-content:center; z-index:100; }
+  .modalPanel { background:#171a13; border:1px solid #2a2e26; border-top-left-radius:14px; border-top-right-radius:14px;
+    width:100%; max-width:520px; max-height:88vh; overflow-y:auto; padding:16px; -webkit-overflow-scrolling:touch; }
+  .modalTitle { font-family:'Oswald',sans-serif; font-size:17px; font-weight:600; color:#f3f1e7; margin-bottom:4px; }
+  .modalSub { font-size:11px; color:#8b9184; margin-bottom:16px; }
+  .settingsSection { margin-bottom:18px; }
+  .settingsLabel { font-size:11px; color:#8b9184; text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px; }
+  .settingsRow { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+  .numInput { background:#12140f; border:1px solid #3a3f38; color:#eee; border-radius:6px; padding:8px 10px;
+    font-size:14px; width:64px; }
+  .textInput { background:#12140f; border:1px solid #3a3f38; color:#eee; border-radius:6px; padding:8px 10px;
+    font-size:14px; flex:1; }
+  .teamRowLabel { width:26px; font-family:'IBM Plex Mono',monospace; font-size:11px; color:#6f756a; flex-shrink:0; }
+  .youBadge { font-size:9px; font-weight:700; color:#12140f; background:#d4a72c; border-radius:4px; padding:3px 6px;
+    flex-shrink:0; }
+  .activeBadge { font-size:9px; font-weight:700; color:#12140f; background:#4ab3d4; border-radius:4px; padding:3px 6px;
+    flex-shrink:0; }
+  .posGrid { display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; }
+  .posGridItem { display:flex; flex-direction:column; gap:4px; }
+  .posGridLabel { font-size:11px; color:#8b9184; }
+  .rosterTotal { font-size:11px; color:#6f756a; margin-top:8px; }
+  .modalActions { display:flex; gap:8px; margin-top:16px; position:sticky; bottom:0; background:#171a13; padding-top:10px; }
+  .saveBtn { flex:1; background:#d4a72c; border:none; color:#12140f; font-weight:700; border-radius:8px; padding:12px;
+    font-size:14px; cursor:pointer; }
+  .closeBtn { background:transparent; border:1px solid #3a3f38; color:#8b9184; border-radius:8px; padding:12px 16px;
+    font-size:14px; cursor:pointer; }
+  .warnNote { font-size:11px; color:#c98080; margin-top:10px; line-height:1.4; }
+
+  .leagueRow { display:flex; align-items:center; gap:8px; padding:10px 0; border-bottom:1px solid #23261f; }
+  .leagueRow:last-of-type { border-bottom:none; }
+  .leagueSwitchBtn { background:transparent; border:1px solid #3a3f38; color:#c9cdc3; border-radius:6px;
+    padding:7px 12px; font-size:12px; cursor:pointer; flex-shrink:0; }
+  .leagueDeleteBtn { background:transparent; border:1px solid #4a2e2e; color:#c98080; border-radius:6px;
+    padding:7px 10px; font-size:12px; cursor:pointer; flex-shrink:0; }
+  .leagueDeleteBtn:disabled { opacity:0.3; }
+  .addLeagueBtn { width:100%; background:#1c2d33; border:1px solid #2a3f4a; color:#4ab3d4; border-radius:8px;
+    padding:12px; font-size:13px; font-weight:600; cursor:pointer; margin-top:12px; }
 </style>
 </head>
 <body>
 
 <div class="header">
   <div>
-    <div class="leagueName">CLAM BUMP JR</div>
-    <div class="leagueMeta">12-team &middot; Full PPR &middot; 6pt all TDs &middot; Snake</div>
+    <div class="leagueName" id="leagueNameEl">DRAFT TRACKER</div>
+    <div class="leagueMeta" id="leagueMetaEl">12-team &middot; Full PPR &middot; 6pt all TDs &middot; Snake</div>
   </div>
   <div class="headerRight">
     <div class="pickBadge">
@@ -125,6 +166,8 @@
       <span class="pickBadgeLabel">ON THE CLOCK</span>
       <span class="pickBadgeValue" id="clockVal">Team 1</span>
     </div>
+    <button class="leaguesBtn" id="leaguesBtn">🏈 League</button>
+    <button class="settingsBtn" id="settingsBtn">&#9881; Settings</button>
     <button class="undoBtn" id="undoBtn">Undo last</button>
   </div>
 </div>
@@ -163,8 +206,10 @@
     <div id="rosterList"></div>
   </div>
 
-  <button class="resetBtn" id="resetBtn">Reset draft</button>
+  <button class="resetBtn" id="resetBtn">Reset this league's draft</button>
 </div>
+
+<div id="modalRoot"></div>
 
 <script>
 /* ---------------- PLAYER DATA (2026 PPR ADP, consensus) ---------------- */
@@ -243,39 +288,95 @@ const POS_COLOR = { QB:"#d64545", RB:"#3fae5c", WR:"#3d8bd9", TE:"#e08a2b", DEF:
 const POS_BG = { QB:"rgba(214,69,69,0.14)", RB:"rgba(63,174,92,0.14)", WR:"rgba(61,139,217,0.14)",
   TE:"rgba(224,138,43,0.14)", DEF:"rgba(138,143,152,0.14)", PK:"rgba(138,143,152,0.14)" };
 
-const TEAM_COUNT = 12, YOUR_TEAM = 11, ROUNDS = 16;
-const STORAGE_KEY = "clambumpjr-draft-state-v1";
+const STORAGE_KEY_MULTI = "draft-tracker-multi-v1";
+const STORAGE_KEY_LEGACY = "draft-tracker-state-v2";
 
-function pickTeam(pickIndex) {
-  const round = Math.floor(pickIndex / TEAM_COUNT);
-  const posInRound = pickIndex % TEAM_COUNT;
-  return round % 2 === 0 ? posInRound + 1 : TEAM_COUNT - posInRound;
+const DEFAULT_SETTINGS = {
+  teamCount: 12,
+  yourSpot: 11,
+  teamNames: Array.from({length:12}, (_,i) => `Team ${i+1}`),
+  rosterTargets: { QB:2, RB:5, WR:5, TE:2, DEF:1, PK:1 }
+};
+
+function makeLeague(name) {
+  const id = "L" + Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+  return {
+    id, name: name || "New League",
+    settings: JSON.parse(JSON.stringify(DEFAULT_SETTINGS)),
+    drafted: {}, history: []
+  };
 }
 
-let state = { drafted:{}, history:[], query:"", posFilter:"ALL", activeRank:null, pendingTeam:YOUR_TEAM };
-
-try {
-  const saved = localStorage.getItem(STORAGE_KEY);
-  if (saved) {
-    const parsed = JSON.parse(saved);
-    if (parsed.drafted) state.drafted = parsed.drafted;
-    if (parsed.history) state.history = parsed.history;
-  }
-} catch(e) {}
-
-function persist() {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify({drafted: state.drafted, history: state.history})); } catch(e) {}
+function rounds(settings) {
+  return Object.values(settings.rosterTargets).reduce((a,b)=>a+b, 0);
 }
+function pickTeam(pickIndex, settings) {
+  const tc = settings.teamCount;
+  const round = Math.floor(pickIndex / tc);
+  const posInRound = pickIndex % tc;
+  return round % 2 === 0 ? posInRound + 1 : tc - posInRound;
+}
+function teamName(n, settings) {
+  return settings.teamNames[n-1] || `Team ${n}`;
+}
+
+/* ---- load / migrate storage into the multi-league store ---- */
+function loadStore() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY_MULTI);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed.leagues && parsed.leagueOrder && parsed.leagueOrder.length) return parsed;
+    }
+  } catch(e) {}
+
+  // Migrate a pre-existing single-league save (from before multi-league support)
+  try {
+    const legacy = localStorage.getItem(STORAGE_KEY_LEGACY);
+    if (legacy) {
+      const parsed = JSON.parse(legacy);
+      const league = makeLeague("My League");
+      if (parsed.settings) league.settings = parsed.settings;
+      if (parsed.drafted) league.drafted = parsed.drafted;
+      if (parsed.history) league.history = parsed.history;
+      return { activeLeagueId: league.id, leagueOrder: [league.id], leagues: { [league.id]: league } };
+    }
+  } catch(e) {}
+
+  const league = makeLeague("My League");
+  return { activeLeagueId: league.id, leagueOrder: [league.id], leagues: { [league.id]: league } };
+}
+
+function persistStore() {
+  try { localStorage.setItem(STORAGE_KEY_MULTI, JSON.stringify(store)); } catch(e) {}
+}
+
+function activeLeague() { return store.leagues[store.activeLeagueId]; }
+
+let store = loadStore();
+
+let state = {
+  query:"", posFilter:"ALL", activeRank:null, pendingTeam: activeLeague().settings.yourSpot,
+  settingsOpen:false, settingsDraft:null, leaguesOpen:false
+};
 
 function availablePlayers() {
-  return players.filter(p => !state.drafted[p.rank]);
+  const drafted = activeLeague().drafted;
+  return players.filter(p => !drafted[p.rank]);
 }
 
 function render() {
-  const pickIndex = state.history.length;
-  const onClockTeam = pickTeam(pickIndex);
+  const league = activeLeague();
+  const s = league.settings;
+  const TEAM_COUNT = s.teamCount, YOUR_TEAM = s.yourSpot, ROUNDS = rounds(s);
+  const pickIndex = league.history.length;
+  const onClockTeam = pickTeam(pickIndex, s);
   const currentRound = Math.min(Math.floor(pickIndex / TEAM_COUNT) + 1, ROUNDS);
 
+  document.getElementById("leagueNameEl").textContent = league.name.toUpperCase();
+  document.getElementById("leagueMetaEl").textContent =
+    `${TEAM_COUNT}-team \u00b7 Full PPR \u00b7 6pt all TDs \u00b7 Snake`;
+  document.getElementById("leaguesBtn").textContent = "🏈 " + league.name;
   document.getElementById("roundVal").textContent = currentRound;
   const clockVal = document.getElementById("clockVal");
   const clockBadge = document.getElementById("clockBadge");
@@ -284,16 +385,15 @@ function render() {
     clockVal.style.color = "#d4a72c";
     clockBadge.style.borderColor = "#d4a72c";
   } else {
-    clockVal.textContent = "Team " + onClockTeam;
+    clockVal.textContent = teamName(onClockTeam, s);
     clockVal.style.color = "#eee";
     clockBadge.style.borderColor = "#3a3f38";
   }
-  document.getElementById("undoBtn").disabled = state.history.length === 0;
+  document.getElementById("undoBtn").disabled = league.history.length === 0;
 
-  // your next pick
   let yourNextPickIn = null;
   for (let i = pickIndex; i < TEAM_COUNT * ROUNDS; i++) {
-    if (pickTeam(i) === YOUR_TEAM) { yourNextPickIn = i - pickIndex; break; }
+    if (pickTeam(i, s) === YOUR_TEAM) { yourNextPickIn = i - pickIndex; break; }
   }
   const stripEl = document.getElementById("nextPickStrip");
   if (yourNextPickIn !== null) {
@@ -305,7 +405,6 @@ function render() {
     stripEl.style.display = "none";
   }
 
-  // snake track
   const round = Math.floor(pickIndex / TEAM_COUNT);
   const posInRound = pickIndex % TEAM_COUNT;
   const order = round % 2 === 0
@@ -317,18 +416,18 @@ function render() {
       const isCurrent = i === posInRound;
       const isYou = team === YOUR_TEAM;
       const cls = "snakeDot" + (isYou?" snakeDotYou":"") + (isCurrent?" snakeDotCurrent":"");
-      return `<div class="${cls}">${team}</div>`;
+      const label = isYou ? "YOU" : String(team);
+      return `<div class="${cls}" title="${teamName(team,s)}">${label}</div>`;
     }).join("") + `</div>`;
 
   const available = availablePlayers();
 
-  // your roster + needs
-  const yourRoster = Object.entries(state.drafted)
+  const yourRoster = Object.entries(league.drafted)
     .filter(([,team]) => team === YOUR_TEAM)
     .map(([rank]) => players.find(p => p.rank === Number(rank)))
     .filter(Boolean).sort((a,b)=>a.rank-b.rank);
 
-  const SOFT_TARGET = { QB:2, RB:5, WR:5, TE:2, DEF:1, PK:1 };
+  const SOFT_TARGET = s.rosterTargets;
   const draftedCounts = {};
   yourRoster.forEach(p => { draftedCounts[p.pos] = (draftedCounts[p.pos]||0)+1; });
   function needScore(pos) {
@@ -370,7 +469,6 @@ function render() {
         <span class="rosterName">${p.name}</span>
       </div>`).join("");
 
-  // filters
   const positions = ["ALL","QB","RB","WR","TE","DEF","PK"];
   document.getElementById("posTabs").innerHTML = positions.map(p => {
     const active = state.posFilter === p;
@@ -404,7 +502,7 @@ function render() {
         html += `<div class="assignPanel">
           <span class="assignLabel">Drafted by</span>
           <select class="assignSelect" id="assignSelect">
-            ${teamOptions.map(t => `<option value="${t}" ${state.pendingTeam===t?"selected":""}>${t===YOUR_TEAM?`Team ${t} (You)`:`Team ${t}`}</option>`).join("")}
+            ${teamOptions.map(t => `<option value="${t}" ${state.pendingTeam===t?"selected":""}>${t===YOUR_TEAM?`${teamName(t,s)} (You)`:teamName(t,s)}</option>`).join("")}
           </select>
           <button class="confirmBtn" data-confirm="${p.rank}">Confirm pick</button>
           <button class="cancelBtn" id="cancelBtn">Cancel</button>
@@ -414,21 +512,228 @@ function render() {
     }).join("");
   }
 
+  renderSettingsModal();
+  renderLeaguesModal();
   attachListeners();
+}
+
+function renderSettingsModal() {
+  const root = document.getElementById("modalRoot");
+  if (!state.settingsOpen) { if (!state.leaguesOpen) root.innerHTML = ""; return; }
+
+  const d = state.settingsDraft;
+  const posLabels = { QB:"QB", RB:"RB", WR:"WR", TE:"TE", DEF:"DEF", PK:"K" };
+  const total = Object.values(d.rosterTargets).reduce((a,b)=>a+b,0);
+
+  root.innerHTML = `
+    <div class="modalOverlay" id="modalOverlay">
+      <div class="modalPanel" id="modalPanel">
+        <div class="modalTitle">League settings — ${activeLeague().name}</div>
+        <div class="modalSub">Changes apply the next time you reset this league's draft, since pick order depends on these.</div>
+
+        <div class="settingsSection">
+          <div class="settingsLabel">Number of teams</div>
+          <input class="numInput" type="number" min="2" max="20" id="teamCountInput" value="${d.teamCount}" />
+        </div>
+
+        <div class="settingsSection">
+          <div class="settingsLabel">Your draft spot</div>
+          <input class="numInput" type="number" min="1" max="${d.teamCount}" id="yourSpotInput" value="${d.yourSpot}" />
+        </div>
+
+        <div class="settingsSection">
+          <div class="settingsLabel">Team names</div>
+          <div id="teamNamesList">
+            ${d.teamNames.map((name, i) => `
+              <div class="settingsRow">
+                <span class="teamRowLabel">#${i+1}</span>
+                <input class="textInput" data-team-idx="${i}" value="${name.replace(/"/g,'&quot;')}" />
+                ${ (i+1) === d.yourSpot ? '<span class="youBadge">YOU</span>' : '' }
+              </div>
+            `).join("")}
+          </div>
+        </div>
+
+        <div class="settingsSection">
+          <div class="settingsLabel">Roster size (starters + bench, per position)</div>
+          <div class="posGrid">
+            ${Object.keys(d.rosterTargets).map(pos => `
+              <div class="posGridItem">
+                <span class="posGridLabel">${posLabels[pos]}</span>
+                <input class="numInput" type="number" min="0" max="10" data-pos-target="${pos}" value="${d.rosterTargets[pos]}" />
+              </div>
+            `).join("")}
+          </div>
+          <div class="rosterTotal">Total roster spots: <span id="rosterTotalVal">${total}</span> (this sets how many rounds the draft runs)</div>
+        </div>
+
+        <div class="warnNote">Changing team count or roster size after picks have been made will reset this league's current draft board.</div>
+
+        <div class="modalActions">
+          <button class="closeBtn" id="settingsCancelBtn">Cancel</button>
+          <button class="saveBtn" id="settingsSaveBtn">Save settings</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById("teamCountInput").onchange = (e) => {
+    let n = Math.max(2, Math.min(20, Number(e.target.value) || d.teamCount));
+    const names = d.teamNames.slice(0, n);
+    while (names.length < n) names.push(`Team ${names.length+1}`);
+    state.settingsDraft = { ...d, teamCount: n, teamNames: names, yourSpot: Math.min(d.yourSpot, n) };
+    renderSettingsModal();
+  };
+  document.getElementById("yourSpotInput").onchange = (e) => {
+    let n = Math.max(1, Math.min(d.teamCount, Number(e.target.value) || d.yourSpot));
+    state.settingsDraft = { ...d, yourSpot: n };
+    renderSettingsModal();
+  };
+  document.querySelectorAll("[data-team-idx]").forEach(input => {
+    input.onchange = (e) => {
+      const idx = Number(e.target.dataset.teamIdx);
+      const names = [...state.settingsDraft.teamNames];
+      names[idx] = e.target.value || `Team ${idx+1}`;
+      state.settingsDraft = { ...state.settingsDraft, teamNames: names };
+    };
+  });
+  document.querySelectorAll("[data-pos-target]").forEach(input => {
+    input.onchange = (e) => {
+      const pos = e.target.dataset.posTarget;
+      const val = Math.max(0, Math.min(10, Number(e.target.value) || 0));
+      const targets = { ...state.settingsDraft.rosterTargets, [pos]: val };
+      state.settingsDraft = { ...state.settingsDraft, rosterTargets: targets };
+      renderSettingsModal();
+    };
+  });
+
+  document.getElementById("settingsCancelBtn").onclick = () => {
+    state.settingsOpen = false; state.settingsDraft = null; render();
+  };
+  document.getElementById("settingsSaveBtn").onclick = () => {
+    const league = activeLeague();
+    const changed = JSON.stringify(state.settingsDraft) !== JSON.stringify(league.settings);
+    const hadPicks = league.history.length > 0;
+    league.settings = state.settingsDraft;
+    if (changed && hadPicks) {
+      league.drafted = {}; league.history = [];
+    }
+    state.pendingTeam = league.settings.yourSpot;
+    state.settingsOpen = false; state.settingsDraft = null;
+    persistStore(); render();
+  };
+  document.getElementById("modalOverlay").onclick = (e) => {
+    if (e.target.id === "modalOverlay") {
+      state.settingsOpen = false; state.settingsDraft = null; render();
+    }
+  };
+}
+
+function renderLeaguesModal() {
+  const root = document.getElementById("modalRoot");
+  if (!state.leaguesOpen) { if (!state.settingsOpen) root.innerHTML = ""; return; }
+
+  root.innerHTML = `
+    <div class="modalOverlay" id="leaguesOverlay">
+      <div class="modalPanel" id="leaguesPanel">
+        <div class="modalTitle">Your leagues</div>
+        <div class="modalSub">Each league keeps its own settings, team names, and draft progress.</div>
+        <div id="leaguesList">
+          ${store.leagueOrder.map(id => {
+            const lg = store.leagues[id];
+            const isActive = id === store.activeLeagueId;
+            return `
+              <div class="leagueRow">
+                <input class="textInput" data-league-name="${id}" value="${lg.name.replace(/"/g,'&quot;')}" />
+                ${isActive ? '<span class="activeBadge">ACTIVE</span>' : `<button class="leagueSwitchBtn" data-switch-league="${id}">Switch</button>`}
+                <button class="leagueDeleteBtn" data-delete-league="${id}" ${store.leagueOrder.length===1?"disabled":""}>Delete</button>
+              </div>
+            `;
+          }).join("")}
+        </div>
+        <button class="addLeagueBtn" id="addLeagueBtn">+ Add new league</button>
+        <div class="modalActions">
+          <button class="closeBtn" id="leaguesCloseBtn" style="flex:1">Close</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.querySelectorAll("[data-league-name]").forEach(input => {
+    input.onchange = (e) => {
+      const id = e.target.dataset.leagueName;
+      store.leagues[id].name = e.target.value || "Untitled League";
+      persistStore(); render();
+    };
+  });
+  document.querySelectorAll("[data-switch-league]").forEach(btn => {
+    btn.onclick = () => {
+      store.activeLeagueId = btn.dataset.switchLeague;
+      state.pendingTeam = activeLeague().settings.yourSpot;
+      state.activeRank = null;
+      persistStore();
+      state.leaguesOpen = false;
+      render();
+    };
+  });
+  document.querySelectorAll("[data-delete-league]").forEach(btn => {
+    btn.onclick = () => {
+      const id = btn.dataset.deleteLeague;
+      if (store.leagueOrder.length === 1) return;
+      if (!confirm(`Delete "${store.leagues[id].name}"? This can't be undone.`)) return;
+      store.leagueOrder = store.leagueOrder.filter(x => x !== id);
+      delete store.leagues[id];
+      if (store.activeLeagueId === id) {
+        store.activeLeagueId = store.leagueOrder[0];
+        state.pendingTeam = activeLeague().settings.yourSpot;
+      }
+      persistStore(); render();
+    };
+  });
+  document.getElementById("addLeagueBtn").onclick = () => {
+    const lg = makeLeague("New League");
+    store.leagues[lg.id] = lg;
+    store.leagueOrder.push(lg.id);
+    store.activeLeagueId = lg.id;
+    state.pendingTeam = lg.settings.yourSpot;
+    persistStore();
+    // Jump straight into settings for the new league so it's easy to configure
+    state.leaguesOpen = false;
+    state.settingsDraft = JSON.parse(JSON.stringify(lg.settings));
+    state.settingsOpen = true;
+    render();
+  };
+  document.getElementById("leaguesCloseBtn").onclick = () => {
+    state.leaguesOpen = false; render();
+  };
+  document.getElementById("leaguesOverlay").onclick = (e) => {
+    if (e.target.id === "leaguesOverlay") { state.leaguesOpen = false; render(); }
+  };
 }
 
 function attachListeners() {
   document.getElementById("undoBtn").onclick = () => {
-    if (state.history.length === 0) return;
-    const last = state.history[state.history.length-1];
-    delete state.drafted[last];
-    state.history = state.history.slice(0,-1);
-    persist(); render();
+    const league = activeLeague();
+    if (league.history.length === 0) return;
+    const last = league.history[league.history.length-1];
+    delete league.drafted[last];
+    league.history = league.history.slice(0,-1);
+    persistStore(); render();
   };
   document.getElementById("resetBtn").onclick = () => {
-    if (!confirm("Reset the whole draft board?")) return;
-    state.drafted = {}; state.history = []; state.activeRank = null;
-    persist(); render();
+    if (!confirm("Reset this league's draft board?")) return;
+    const league = activeLeague();
+    league.drafted = {}; league.history = []; state.activeRank = null;
+    persistStore(); render();
+  };
+  document.getElementById("settingsBtn").onclick = () => {
+    state.settingsDraft = JSON.parse(JSON.stringify(activeLeague().settings));
+    state.settingsOpen = true;
+    render();
+  };
+  document.getElementById("leaguesBtn").onclick = () => {
+    state.leaguesOpen = true;
+    render();
   };
   document.getElementById("searchInput").oninput = (e) => {
     state.query = e.target.value; render();
@@ -444,7 +749,7 @@ function attachListeners() {
     row.onclick = () => {
       const rank = Number(row.dataset.rank);
       state.activeRank = state.activeRank === rank ? null : rank;
-      state.pendingTeam = pickTeam(state.history.length);
+      state.pendingTeam = pickTeam(activeLeague().history.length, activeLeague().settings);
       render();
       const el = document.querySelector(`.row[data-rank="${rank}"]`);
       if (el) el.scrollIntoView({block:"center"});
@@ -455,7 +760,7 @@ function attachListeners() {
     row.onclick = () => {
       const rank = Number(row.dataset.rank);
       if (state.activeRank === rank) { state.activeRank = null; }
-      else { state.activeRank = rank; state.pendingTeam = pickTeam(state.history.length); }
+      else { state.activeRank = rank; state.pendingTeam = pickTeam(activeLeague().history.length, activeLeague().settings); }
       render();
     };
   });
@@ -467,10 +772,11 @@ function attachListeners() {
   if (confirmBtn) confirmBtn.onclick = (e) => {
     e.stopPropagation();
     const rank = Number(confirmBtn.dataset.confirm);
-    state.drafted[rank] = state.pendingTeam;
-    state.history.push(rank);
+    const league = activeLeague();
+    league.drafted[rank] = state.pendingTeam;
+    league.history.push(rank);
     state.activeRank = null;
-    persist(); render();
+    persistStore(); render();
   };
 
   const cancelBtn = document.getElementById("cancelBtn");
@@ -480,17 +786,6 @@ function attachListeners() {
   if (askAiBtn) askAiBtn.onclick = askAI;
 }
 
-/**
- * askAI()
- * -------
- * This is the CLIENT side of the client/server round trip described in
- * netlify/functions/suggest-pick.js. Notice this function never sees or
- * sends any API key — it just packages up the current draft state as
- * plain JSON and POSTs it to our own backend endpoint. The path
- * "/.netlify/functions/suggest-pick" is a Netlify convention: any file in
- * netlify/functions/ automatically becomes a route at that URL once the
- * function backend is deployed.
- */
 async function askAI() {
   const btn = document.getElementById("askAiBtn");
   const out = document.getElementById("aiOutput");
@@ -500,21 +795,20 @@ async function askAI() {
   out.textContent = "";
 
   try {
+    const league = activeLeague();
+    const s = league.settings;
     const available = availablePlayers()
       .slice(0, 40)
       .map((p) => ({ rank: p.rank, name: p.name, pos: p.pos, team: p.team }));
 
-    const yourRoster = Object.entries(state.drafted)
-      .filter(([, team]) => team === YOUR_TEAM)
+    const yourRoster = Object.entries(league.drafted)
+      .filter(([, team]) => team === s.yourSpot)
       .map(([rank]) => players.find((p) => p.rank === Number(rank)))
       .filter(Boolean);
 
-    const pickIndex = state.history.length;
-    const round = Math.floor(pickIndex / TEAM_COUNT) + 1;
+    const pickIndex = league.history.length;
+    const round = Math.floor(pickIndex / s.teamCount) + 1;
 
-    // fetch() is the browser's built-in way to make an HTTP request.
-    // "await" pauses this function until the response comes back, without
-    // freezing the rest of the page — that's what "async" functions give you.
     const res = await fetch("/.netlify/functions/suggest-pick", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -524,8 +818,6 @@ async function askAI() {
     const data = await res.json();
     out.textContent = data.text || data.error || "No response from server.";
   } catch (err) {
-    // This fires if the function isn't deployed yet, or there's no network —
-    // useful to see while you're still setting things up locally.
     out.textContent = "Couldn't reach the AI backend: " + err.message +
       "\n\n(Are you running this locally without `netlify dev`? See README.)";
   } finally {
