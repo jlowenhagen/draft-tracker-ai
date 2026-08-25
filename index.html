@@ -295,7 +295,8 @@ const DEFAULT_SETTINGS = {
   teamCount: 12,
   yourSpot: 11,
   teamNames: Array.from({length:12}, (_,i) => `Team ${i+1}`),
-  rosterTargets: { QB:2, RB:5, WR:5, TE:2, DEF:1, PK:1 }
+  rosterTargets: { QB:1, RB:2, WR:2, TE:1, DEF:1, PK:1 },
+  benchSpots: 6
 };
 
 function makeLeague(name) {
@@ -308,7 +309,8 @@ function makeLeague(name) {
 }
 
 function rounds(settings) {
-  return Object.values(settings.rosterTargets).reduce((a,b)=>a+b, 0);
+  const starters = Object.values(settings.rosterTargets).reduce((a,b)=>a+b, 0);
+  return starters + (settings.benchSpots || 0);
 }
 function pickTeam(pickIndex, settings) {
   const tc = settings.teamCount;
@@ -523,7 +525,9 @@ function renderSettingsModal() {
 
   const d = state.settingsDraft;
   const posLabels = { QB:"QB", RB:"RB", WR:"WR", TE:"TE", DEF:"DEF", PK:"K" };
-  const total = Object.values(d.rosterTargets).reduce((a,b)=>a+b,0);
+  const starterTotal = Object.values(d.rosterTargets).reduce((a,b)=>a+b,0);
+  const bench = d.benchSpots || 0;
+  const total = starterTotal + bench;
 
   root.innerHTML = `
     <div class="modalOverlay" id="modalOverlay">
@@ -555,7 +559,7 @@ function renderSettingsModal() {
         </div>
 
         <div class="settingsSection">
-          <div class="settingsLabel">Roster size (starters + bench, per position)</div>
+          <div class="settingsLabel">Starters per position</div>
           <div class="posGrid">
             ${Object.keys(d.rosterTargets).map(pos => `
               <div class="posGridItem">
@@ -564,7 +568,12 @@ function renderSettingsModal() {
               </div>
             `).join("")}
           </div>
-          <div class="rosterTotal">Total roster spots: <span id="rosterTotalVal">${total}</span> (this sets how many rounds the draft runs)</div>
+        </div>
+
+        <div class="settingsSection">
+          <div class="settingsLabel">Bench spots (not tied to a position)</div>
+          <input class="numInput" type="number" min="0" max="20" id="benchInput" value="${bench}" />
+          <div class="rosterTotal">Total roster spots: <span id="rosterTotalVal">${starterTotal}</span> starters + <span>${bench}</span> bench = <strong>${total}</strong> rounds</div>
         </div>
 
         <div class="warnNote">Changing team count or roster size after picks have been made will reset this league's current draft board.</div>
@@ -606,6 +615,12 @@ function renderSettingsModal() {
       renderSettingsModal();
     };
   });
+  const benchInput = document.getElementById("benchInput");
+  if (benchInput) benchInput.onchange = (e) => {
+    const val = Math.max(0, Math.min(20, Number(e.target.value) || 0));
+    state.settingsDraft = { ...state.settingsDraft, benchSpots: val };
+    renderSettingsModal();
+  };
 
   document.getElementById("settingsCancelBtn").onclick = () => {
     state.settingsOpen = false; state.settingsDraft = null; render();
