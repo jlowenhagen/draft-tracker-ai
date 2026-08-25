@@ -164,6 +164,7 @@
   <div>
     <div class="leagueName" id="leagueNameEl">DRAFT TRACKER</div>
     <div class="leagueMeta" id="leagueMetaEl">12-team &middot; Full PPR &middot; 6pt all TDs &middot; Snake</div>
+    <div class="leagueMeta" id="rankingsStatusEl">Loading live rankings…</div>
   </div>
   <div class="headerRight">
     <div class="pickBadge">
@@ -294,7 +295,8 @@ const RAW = [
 [196,"Tory Horton","WR","SEA",11],[197,"Cam Little","PK","JAX",7],[198,"Harrison Butker2","PK","KC",5],
 [199,"Travis Kelce2","TE","KC",5],[200,"Jalen Nailor","WR","LV",13]
 ];
-const players = RAW.map(([rank,name,pos,team,bye]) => ({rank,name,pos,team,bye}));
+let players = RAW.map(([rank,name,pos,team,bye]) => ({rank,name,pos,team,bye}));
+let rankingsSource = "static"; // "static" or "live" — shown in the UI so it's never a mystery which data you're on
 
 const POS_COLOR = { QB:"#d64545", RB:"#3fae5c", WR:"#3d8bd9", TE:"#e08a2b", DEF:"#8a8f98", PK:"#8a8f98" };
 const POS_BG = { QB:"rgba(214,69,69,0.14)", RB:"rgba(63,174,92,0.14)", WR:"rgba(61,139,217,0.14)",
@@ -854,6 +856,37 @@ async function askAI() {
 }
 
 render();
+
+/**
+ * loadLiveRankings()
+ * -------------------
+ * Tries to replace the static, embedded player list with fresh data from
+ * our get-rankings function (which itself calls FantasyFootballCalculator's
+ * live ADP API). If anything goes wrong — the API's down, a network blip,
+ * you're on bad wifi at a draft party — we simply keep using the embedded
+ * static list and say so. The app should never be BROKEN by a live data
+ * source; at worst, it's slightly stale.
+ */
+async function loadLiveRankings() {
+  const statusEl = document.getElementById("rankingsStatusEl");
+  try {
+    const res = await fetch("/.netlify/functions/get-rankings");
+    if (!res.ok) throw new Error("bad response");
+    const data = await res.json();
+    if (!data.players || !data.players.length) throw new Error("empty response");
+
+    players = data.players;
+    rankingsSource = "live";
+    const fetchedTime = new Date(data.fetchedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    statusEl.textContent = `Live rankings \u00b7 updated ${fetchedTime}`;
+    render(); // re-render now that `players` has fresh data
+  } catch (err) {
+    rankingsSource = "static";
+    statusEl.textContent = "Using built-in rankings (live source unavailable)";
+  }
+}
+
+loadLiveRankings();
 </script>
 </body>
 </html>
