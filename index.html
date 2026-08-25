@@ -50,6 +50,14 @@
     border-bottom:1px solid #2a2e26; }
 
   .body { padding:12px; display:flex; flex-direction:column; gap:14px; }
+  .mainCol { display:flex; flex-direction:column; gap:14px; min-width:0; }
+  .sideCol { display:flex; flex-direction:column; gap:14px; }
+  @media (min-width: 900px) {
+    .body { flex-direction:row; align-items:flex-start; }
+    .mainCol { flex:2; }
+    .sideCol { flex:1; max-width:360px; position:sticky; top:12px; }
+    .listWrap { max-height:78vh; }
+  }
 
   .card { background:#171a13; border:1px solid #2a2e26; border-radius:10px; padding:12px; }
   .cardTitle { font-family:'Oswald',sans-serif; font-size:12px; letter-spacing:.05em; color:#8b9184;
@@ -176,37 +184,41 @@
 <div class="nextPickStrip" id="nextPickStrip" style="display:none"></div>
 
 <div class="body">
-  <div class="card suggestCard">
-    <div class="cardTitle">Suggested for you</div>
-    <div id="suggestList"></div>
-    <div class="suggestNote">Ranked by ADP value and gaps in your roster. Tap one to draft it.</div>
+  <div class="mainCol">
+    <div class="filterRow">
+      <input class="search" id="searchInput" placeholder="Search a player…" />
+      <div class="tabs" id="posTabs"></div>
+    </div>
+
+    <div class="listWrap" id="listWrap"></div>
   </div>
 
-  <div class="card aiCard">
-    <div class="cardTitle">Ask Claude</div>
-    <button class="askAiBtn" id="askAiBtn">🤖 Ask AI for deeper analysis</button>
-    <div class="aiOutput" id="aiOutput"></div>
-    <div class="aiNote">Sends your current roster and the top available players to a serverless function, which calls Claude and returns real reasoning — not a canned formula.</div>
+  <div class="sideCol">
+    <div class="card suggestCard">
+      <div class="cardTitle">Suggested for you</div>
+      <div id="suggestList"></div>
+      <div class="suggestNote">Ranked by ADP value and gaps in your roster. Tap one to draft it.</div>
+    </div>
+
+    <div class="card aiCard">
+      <div class="cardTitle">Ask Claude</div>
+      <button class="askAiBtn" id="askAiBtn">🤖 Ask AI for deeper analysis</button>
+      <div class="aiOutput" id="aiOutput"></div>
+      <div class="aiNote">Sends your current roster and the top available players to a serverless function, which calls Claude and returns real reasoning — not a canned formula.</div>
+    </div>
+
+    <div class="card">
+      <div class="cardTitle">Best available</div>
+      <div id="bestAvailList"></div>
+    </div>
+
+    <div class="card">
+      <div class="cardTitle" id="yourTeamTitle">Your team (0)</div>
+      <div id="rosterList"></div>
+    </div>
+
+    <button class="resetBtn" id="resetBtn">Reset this league's draft</button>
   </div>
-
-  <div class="card">
-    <div class="cardTitle">Best available</div>
-    <div id="bestAvailList"></div>
-  </div>
-
-  <div class="filterRow">
-    <input class="search" id="searchInput" placeholder="Search a player…" />
-    <div class="tabs" id="posTabs"></div>
-  </div>
-
-  <div class="listWrap" id="listWrap"></div>
-
-  <div class="card">
-    <div class="cardTitle" id="yourTeamTitle">Your team (0)</div>
-    <div id="rosterList"></div>
-  </div>
-
-  <button class="resetBtn" id="resetBtn">Reset this league's draft</button>
 </div>
 
 <div id="modalRoot"></div>
