@@ -45,6 +45,7 @@
     color:#8b9184; flex-shrink:0; overflow:hidden; }
   .snakeDotYou { border-color:#d4a72c; color:#d4a72c; }
   .snakeDotCurrent { background:#d4a72c; color:#12140f; font-weight:700; }
+  .snakeDotSkipped { border-color:#4a3f1f; color:#8a7a3a; background:#221d10; }
 
   .nextPickStrip { background:rgba(212,167,44,0.1); color:#d4a72c; font-size:12px; padding:7px 16px;
     border-bottom:1px solid #2a2e26; }
@@ -308,9 +309,15 @@ const STORAGE_KEY_LEGACY = "draft-tracker-state-v2";
 const DEFAULT_SETTINGS = {
   teamCount: 12,
   yourSpot: 11,
+  scoring: "ppr", // "ppr" | "half-ppr" | "standard" — used to pick live ADP source
   teamNames: Array.from({length:12}, (_,i) => `Team ${i+1}`),
   rosterTargets: { QB:1, RB:2, WR:2, TE:1, DEF:1, PK:1 },
-  benchSpots: 6
+  benchSpots: 6,
+  // One keeper slot per team. Index i corresponds to team i+1.
+  // Each entry is either null (no keeper) or { rank, round } where rank is
+  // the player's rank in our data and round is which round their keeper
+  // "costs" — that team's normal pick in that round is skipped.
+  keepers: Array.from({length:12}, () => null)
 };
 
 function makeLeague(name) {
@@ -326,11 +333,56 @@ function rounds(settings) {
   const starters = Object.values(settings.rosterTargets).reduce((a,b)=>a+b, 0);
   return starters + (settings.benchSpots || 0);
 }
-function pickTeam(pickIndex, settings) {
-  const tc = settings.teamCount;
-  const round = Math.floor(pickIndex / tc);
-  const posInRound = pickIndex % tc;
-  return round % 2 === 0 ? posInRound + 1 : tc - posInRound;
+
+/**
+ * buildDraftOrder(settings)
+ * --------------------------
+ * Returns the real sequence of live picks as an array of {round, team}.
+ * Without keepers this is just the standard snake order. With keepers,
+ * any (team, round) pair that matches a team's keeper round is REMOVED
+ * from the sequence entirely — that team already "spent" that pick on
+ * their keeper before the draft started, so the live draft skips it.
+ */
+function buildDraftOrder(settings) {
+  const TC = settings.teamCount;
+  const R = rounds(settings);
+  const skipByRound = {};
+  (settings.keepers || []).forEach((k, idx) => {
+    if (k && k.rank && k.round) {
+      const team = idx + 1;
+      if (!skipByRound[k.round]) skipByRound[k.round] = new Set();
+      skipByRound[k.round].add(team);
+    }
+  });
+
+  const order = [];
+  for (let r = 1; r <= R; r++) {
+    const ascending = r % 2 === 1;
+    for (let i = 0; i < TC; i++) {
+      const team = ascending ? i + 1 : TC - i;
+      const skipped = skipByRound[r] && skipByRound[r].has(team);
+      if (!skipped) order.push({ round: r, team });
+    }
+  }
+  return order;
+}
+
+/** Which teams (if any) are sitting out round r because of a keeper. */
+function keeperSkipsForRound(settings, r) {
+  const set = new Set();
+  (settings.keepers || []).forEach((k, idx) => {
+    if (k && k.rank && k.round === r) set.add(idx + 1);
+  });
+  return set;
+}
+
+/** Map of playerRank -> team number for every set keeper, regardless of league progress. */
+function keeperDraftedMap(settings) {
+  const map = {};
+  (settings.keepers || []).forEach((k, idx) => {
+    if (k && k.rank) map[k.rank] = idx + 1;
+  });
+  return map;
 }
 function teamName(n, settings) {
   return settings.teamNames[n-1] || `Team ${n}`;
@@ -377,26 +429,34 @@ let state = {
 };
 
 function availablePlayers() {
-  const drafted = activeLeague().drafted;
-  return players.filter(p => !drafted[p.rank]);
+  const league = activeLeague();
+  const keeperMap = keeperDraftedMap(league.settings);
+  return players.filter(p => !league.drafted[p.rank] && !keeperMap[p.rank]);
 }
 
 function render() {
   const league = activeLeague();
   const s = league.settings;
   const TEAM_COUNT = s.teamCount, YOUR_TEAM = s.yourSpot, ROUNDS = rounds(s);
+  const draftOrder = buildDraftOrder(s);
   const pickIndex = league.history.length;
-  const onClockTeam = pickTeam(pickIndex, s);
-  const currentRound = Math.min(Math.floor(pickIndex / TEAM_COUNT) + 1, ROUNDS);
+  const currentEntry = draftOrder[pickIndex] || draftOrder[draftOrder.length - 1];
+  const onClockTeam = currentEntry ? currentEntry.team : null;
+  const currentRound = currentEntry ? currentEntry.round : ROUNDS;
 
+  const scoringLabel = { ppr: "Full PPR", "half-ppr": "Half PPR", standard: "Standard" }[s.scoring] || "Full PPR";
   document.getElementById("leagueNameEl").textContent = league.name.toUpperCase();
   document.getElementById("leagueMetaEl").textContent =
-    `${TEAM_COUNT}-team \u00b7 Full PPR \u00b7 6pt all TDs \u00b7 Snake`;
+    `${TEAM_COUNT}-team \u00b7 ${scoringLabel} \u00b7 Snake`;
   document.getElementById("leaguesBtn").textContent = "🏈 " + league.name;
   document.getElementById("roundVal").textContent = currentRound;
   const clockVal = document.getElementById("clockVal");
   const clockBadge = document.getElementById("clockBadge");
-  if (onClockTeam === YOUR_TEAM) {
+  if (pickIndex >= draftOrder.length) {
+    clockVal.textContent = "Done";
+    clockVal.style.color = "#8b9184";
+    clockBadge.style.borderColor = "#3a3f38";
+  } else if (onClockTeam === YOUR_TEAM) {
     clockVal.textContent = "YOU";
     clockVal.style.color = "#d4a72c";
     clockBadge.style.borderColor = "#d4a72c";
@@ -408,8 +468,8 @@ function render() {
   document.getElementById("undoBtn").disabled = league.history.length === 0;
 
   let yourNextPickIn = null;
-  for (let i = pickIndex; i < TEAM_COUNT * ROUNDS; i++) {
-    if (pickTeam(i, s) === YOUR_TEAM) { yourNextPickIn = i - pickIndex; break; }
+  for (let i = pickIndex; i < draftOrder.length; i++) {
+    if (draftOrder[i].team === YOUR_TEAM) { yourNextPickIn = i - pickIndex; break; }
   }
   const stripEl = document.getElementById("nextPickStrip");
   if (yourNextPickIn !== null) {
@@ -421,27 +481,37 @@ function render() {
     stripEl.style.display = "none";
   }
 
-  const round = Math.floor(pickIndex / TEAM_COUNT);
-  const posInRound = pickIndex % TEAM_COUNT;
-  const order = round % 2 === 0
-    ? Array.from({length:TEAM_COUNT}, (_,i)=>i+1)
-    : Array.from({length:TEAM_COUNT}, (_,i)=>TEAM_COUNT-i);
+  // Snake track: show every team's slot for the current round, including
+  // any sitting out because a keeper already used their pick this round.
+  const skipsThisRound = keeperSkipsForRound(s, currentRound);
+  const ascending = currentRound % 2 === 1;
+  const roundTeams = Array.from({length:TEAM_COUNT}, (_,i) => ascending ? i+1 : TEAM_COUNT-i);
   const snakeWrap = document.getElementById("snakeWrap");
-  snakeWrap.innerHTML = `<span class="snakeRoundLabel">R${round+1}</span><div class="snakeTrack">` +
-    order.map((team,i) => {
-      const isCurrent = i === posInRound;
+  snakeWrap.innerHTML = `<span class="snakeRoundLabel">R${currentRound}</span><div class="snakeTrack">` +
+    roundTeams.map((team) => {
       const isYou = team === YOUR_TEAM;
-      const cls = "snakeDot" + (isYou?" snakeDotYou":"") + (isCurrent?" snakeDotCurrent":"");
-      const label = isYou ? "YOU" : String(team);
-      return `<div class="${cls}" title="${teamName(team,s)}">${label}</div>`;
+      const isSkipped = skipsThisRound.has(team);
+      const isCurrent = !isSkipped && team === onClockTeam;
+      const cls = "snakeDot" + (isYou?" snakeDotYou":"") + (isCurrent?" snakeDotCurrent":"") + (isSkipped?" snakeDotSkipped":"");
+      const label = isSkipped ? "K" : (isYou ? "YOU" : String(team));
+      const title = isSkipped ? `${teamName(team,s)} (keeper this round)` : teamName(team,s);
+      return `<div class="${cls}" title="${title}">${label}</div>`;
     }).join("") + `</div>`;
 
   const available = availablePlayers();
+  const keeperMap = keeperDraftedMap(s);
 
   const yourRoster = Object.entries(league.drafted)
     .filter(([,team]) => team === YOUR_TEAM)
     .map(([rank]) => players.find(p => p.rank === Number(rank)))
-    .filter(Boolean).sort((a,b)=>a.rank-b.rank);
+    .filter(Boolean)
+    .concat(
+      Object.entries(keeperMap)
+        .filter(([,team]) => team === YOUR_TEAM)
+        .map(([rank]) => players.find(p => p.rank === Number(rank)))
+        .filter(Boolean)
+    )
+    .sort((a,b)=>a.rank-b.rank);
 
   const SOFT_TARGET = s.rosterTargets;
   const draftedCounts = {};
@@ -560,6 +630,18 @@ function renderSettingsModal() {
         </div>
 
         <div class="settingsSection">
+          <div class="settingsLabel">Scoring format</div>
+          <div class="tabs">
+            ${["ppr","half-ppr","standard"].map(fmt => {
+              const labels = { ppr:"Full PPR", "half-ppr":"Half PPR", standard:"Standard" };
+              const active = d.scoring === fmt;
+              return `<button class="tab${active?" active":""}" data-scoring="${fmt}" type="button">${labels[fmt]}</button>`;
+            }).join("")}
+          </div>
+          <div class="rosterTotal">Changes which live ADP rankings load. The built-in offline list is PPR-based regardless of this setting.</div>
+        </div>
+
+        <div class="settingsSection">
           <div class="settingsLabel">Team names</div>
           <div id="teamNamesList">
             ${d.teamNames.map((name, i) => `
@@ -590,7 +672,29 @@ function renderSettingsModal() {
           <div class="rosterTotal">Total roster spots: <span id="rosterTotalVal">${starterTotal}</span> starters + <span>${bench}</span> bench = <strong>${total}</strong> rounds</div>
         </div>
 
-        <div class="warnNote">Changing team count or roster size after picks have been made will reset this league's current draft board.</div>
+        <div class="settingsSection">
+          <div class="settingsLabel">Keepers (optional, one per team)</div>
+          <div id="keepersList">
+            ${d.teamNames.map((name, i) => {
+              const k = (d.keepers && d.keepers[i]) || null;
+              const selectedRank = k ? k.rank : "";
+              const roundVal = k ? k.round : "";
+              return `
+                <div class="settingsRow">
+                  <span class="teamRowLabel" style="width:70px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${name}</span>
+                  <select class="textInput" data-keeper-player="${i}">
+                    <option value="">— none —</option>
+                    ${players.map(p => `<option value="${p.rank}" ${Number(selectedRank)===p.rank?"selected":""}>${p.rank}. ${p.name} (${p.pos}-${p.team})</option>`).join("")}
+                  </select>
+                  <input class="numInput" type="number" min="1" max="${total}" placeholder="Rd" data-keeper-round="${i}" value="${roundVal}" style="width:48px" />
+                </div>
+              `;
+            }).join("")}
+          </div>
+          <div class="rosterTotal">Setting a round means that team's normal pick in that round is skipped — the keeper already "used" it.</div>
+        </div>
+
+        <div class="warnNote">Changing team count, roster size, or keepers after picks have been made will reset this league's current draft board.</div>
 
         <div class="modalActions">
           <button class="closeBtn" id="settingsCancelBtn">Cancel</button>
@@ -604,7 +708,9 @@ function renderSettingsModal() {
     let n = Math.max(2, Math.min(20, Number(e.target.value) || d.teamCount));
     const names = d.teamNames.slice(0, n);
     while (names.length < n) names.push(`Team ${names.length+1}`);
-    state.settingsDraft = { ...d, teamCount: n, teamNames: names, yourSpot: Math.min(d.yourSpot, n) };
+    const keepers = (d.keepers || []).slice(0, n);
+    while (keepers.length < n) keepers.push(null);
+    state.settingsDraft = { ...d, teamCount: n, teamNames: names, keepers, yourSpot: Math.min(d.yourSpot, n) };
     renderSettingsModal();
   };
   document.getElementById("yourSpotInput").onchange = (e) => {
@@ -612,6 +718,12 @@ function renderSettingsModal() {
     state.settingsDraft = { ...d, yourSpot: n };
     renderSettingsModal();
   };
+  document.querySelectorAll("[data-scoring]").forEach(btn => {
+    btn.onclick = () => {
+      state.settingsDraft = { ...state.settingsDraft, scoring: btn.dataset.scoring };
+      renderSettingsModal();
+    };
+  });
   document.querySelectorAll("[data-team-idx]").forEach(input => {
     input.onchange = (e) => {
       const idx = Number(e.target.dataset.teamIdx);
@@ -635,6 +747,27 @@ function renderSettingsModal() {
     state.settingsDraft = { ...state.settingsDraft, benchSpots: val };
     renderSettingsModal();
   };
+  document.querySelectorAll("[data-keeper-player]").forEach(sel => {
+    sel.onchange = (e) => {
+      const idx = Number(e.target.dataset.keeperPlayer);
+      const rank = e.target.value ? Number(e.target.value) : null;
+      const keepers = [...(state.settingsDraft.keepers || [])];
+      const existingRound = keepers[idx] ? keepers[idx].round : null;
+      keepers[idx] = rank ? { rank, round: existingRound } : null;
+      state.settingsDraft = { ...state.settingsDraft, keepers };
+    };
+  });
+  document.querySelectorAll("[data-keeper-round]").forEach(input => {
+    input.onchange = (e) => {
+      const idx = Number(e.target.dataset.keeperRound);
+      const round = e.target.value ? Math.max(1, Number(e.target.value)) : null;
+      const keepers = [...(state.settingsDraft.keepers || [])];
+      if (keepers[idx] && keepers[idx].rank) {
+        keepers[idx] = { ...keepers[idx], round };
+      }
+      state.settingsDraft = { ...state.settingsDraft, keepers };
+    };
+  });
 
   document.getElementById("settingsCancelBtn").onclick = () => {
     state.settingsOpen = false; state.settingsDraft = null; render();
@@ -642,6 +775,7 @@ function renderSettingsModal() {
   document.getElementById("settingsSaveBtn").onclick = () => {
     const league = activeLeague();
     const changed = JSON.stringify(state.settingsDraft) !== JSON.stringify(league.settings);
+    const scoringChanged = state.settingsDraft.scoring !== league.settings.scoring;
     const hadPicks = league.history.length > 0;
     league.settings = state.settingsDraft;
     if (changed && hadPicks) {
@@ -650,6 +784,7 @@ function renderSettingsModal() {
     state.pendingTeam = league.settings.yourSpot;
     state.settingsOpen = false; state.settingsDraft = null;
     persistStore(); render();
+    if (scoringChanged) loadLiveRankings();
   };
   document.getElementById("modalOverlay").onclick = (e) => {
     if (e.target.id === "modalOverlay") {
@@ -697,12 +832,14 @@ function renderLeaguesModal() {
   });
   document.querySelectorAll("[data-switch-league]").forEach(btn => {
     btn.onclick = () => {
+      const prevFormat = activeLeague().settings.scoring;
       store.activeLeagueId = btn.dataset.switchLeague;
       state.pendingTeam = activeLeague().settings.yourSpot;
       state.activeRank = null;
       persistStore();
       state.leaguesOpen = false;
       render();
+      if (activeLeague().settings.scoring !== prevFormat) loadLiveRankings();
     };
   });
   document.querySelectorAll("[data-delete-league]").forEach(btn => {
@@ -738,6 +875,14 @@ function renderLeaguesModal() {
   document.getElementById("leaguesOverlay").onclick = (e) => {
     if (e.target.id === "leaguesOverlay") { state.leaguesOpen = false; render(); }
   };
+}
+
+/** Convenience helper used by click handlers to find whose turn it currently is. */
+function currentOnClockTeam() {
+  const league = activeLeague();
+  const order = buildDraftOrder(league.settings);
+  const entry = order[league.history.length];
+  return entry ? entry.team : league.settings.yourSpot;
 }
 
 function attachListeners() {
@@ -778,7 +923,7 @@ function attachListeners() {
     row.onclick = () => {
       const rank = Number(row.dataset.rank);
       state.activeRank = state.activeRank === rank ? null : rank;
-      state.pendingTeam = pickTeam(activeLeague().history.length, activeLeague().settings);
+      state.pendingTeam = currentOnClockTeam();
       render();
       const el = document.querySelector(`.row[data-rank="${rank}"]`);
       if (el) el.scrollIntoView({block:"center"});
@@ -789,7 +934,7 @@ function attachListeners() {
     row.onclick = () => {
       const rank = Number(row.dataset.rank);
       if (state.activeRank === rank) { state.activeRank = null; }
-      else { state.activeRank = rank; state.pendingTeam = pickTeam(activeLeague().history.length, activeLeague().settings); }
+      else { state.activeRank = rank; state.pendingTeam = currentOnClockTeam(); }
       render();
     };
   });
@@ -830,13 +975,20 @@ async function askAI() {
       .slice(0, 40)
       .map((p) => ({ rank: p.rank, name: p.name, pos: p.pos, team: p.team }));
 
+    const keeperMap = keeperDraftedMap(s);
     const yourRoster = Object.entries(league.drafted)
       .filter(([, team]) => team === s.yourSpot)
       .map(([rank]) => players.find((p) => p.rank === Number(rank)))
+      .concat(
+        Object.entries(keeperMap)
+          .filter(([, team]) => team === s.yourSpot)
+          .map(([rank]) => players.find((p) => p.rank === Number(rank)))
+      )
       .filter(Boolean);
 
     const pickIndex = league.history.length;
-    const round = Math.floor(pickIndex / s.teamCount) + 1;
+    const draftOrder = buildDraftOrder(s);
+    const round = (draftOrder[pickIndex] || draftOrder[draftOrder.length - 1] || { round: rounds(s) }).round;
 
     const res = await fetch("/.netlify/functions/suggest-pick", {
       method: "POST",
@@ -869,8 +1021,9 @@ render();
  */
 async function loadLiveRankings() {
   const statusEl = document.getElementById("rankingsStatusEl");
+  const format = activeLeague().settings.scoring || "ppr";
   try {
-    const res = await fetch("/.netlify/functions/get-rankings");
+    const res = await fetch(`/.netlify/functions/get-rankings?format=${encodeURIComponent(format)}`);
     if (!res.ok) throw new Error("bad response");
     const data = await res.json();
     if (!data.players || !data.players.length) throw new Error("empty response");
@@ -878,7 +1031,8 @@ async function loadLiveRankings() {
     players = data.players;
     rankingsSource = "live";
     const fetchedTime = new Date(data.fetchedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-    statusEl.textContent = `Live rankings \u00b7 updated ${fetchedTime}`;
+    const formatLabel = { ppr:"PPR", "half-ppr":"Half PPR", standard:"Standard" }[format] || "PPR";
+    statusEl.textContent = `Live ${formatLabel} rankings \u00b7 updated ${fetchedTime}`;
     render(); // re-render now that `players` has fresh data
   } catch (err) {
     rankingsSource = "static";
